@@ -1,9 +1,11 @@
 from core.router import Router
-from agents.dummy_agent import dummy_agent as da
+from agents.dummy_agent import dummy_agent
+from agents.github_agent import Github_Agent
 
 def load_agents():
     return [
-        da()
+        dummy_agent(),
+        Github_Agent()
     ]
 
 def main():
