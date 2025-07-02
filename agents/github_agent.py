@@ -2,11 +2,9 @@ import os
 from github import Github
 from dotenv import load_dotenv
 from core.agent_base import agent
-from sentence_transformers import SentenceTransformer
-from sklearn.metrics.pairwise import cosine_similarity
+from core.intent import infer_intent
 
 load_dotenv()
-
 
 class Github_Agent(agent):
     def __init__(self):
@@ -15,33 +13,14 @@ class Github_Agent(agent):
             raise ValueError("GITHUB_TOKEN not set in the environment variables")
         
         self.github= Github(token)
+        self.last_intent=""
         
-        self.model= SentenceTransformer('all-mpnet-base-v2')
-        self.examples= [
-            "get open issues from a repo",
-            "list open pull requests",
-            "fetch commits from github",
-            "show me Github PRs",
-            "display repository issues",
-            "retrieve pull requests",
-            "how many PRs are there",
-            "check repository status",
-            "any issues still open",
-            "get repo activity"
-        ]
         
-        self.example_embeddings= self.model.encode(self.examples, convert_to_tensor=True)
-    
     def can_handle(self, query: str)->bool:
-        query_embedding= self.model.encode(query, convert_to_tensor=True)
-        similarity_scores=cosine_similarity(
-            query_embedding.cpu().numpy().reshape(1,-1),
-            self.example_embeddings.cpu().numpy())[0]
-        max_score= max(similarity_scores)
-        
-        print(f"[GithubAgent] Similarity score: {max_score: .3f} for query: {query}" )
-        
-        return max_score>0.55
+        intent=infer_intent(query)
+        self.last_intent=intent
+        print(f'[GithubAgent] Inferred intent:{intent}')
+        return intent in ["github.pull_requests", 'github.issues']
         
         
         
@@ -55,15 +34,13 @@ class Github_Agent(agent):
         except Exception as e:
             return f"Eroor accessing the repository {repo_name}: {str(e)}"
         
-        query=query.lower()
-        
-        if "issue" in query:
+        if self.last_intent=="github.issues":
             issues=repo.get_issues(state= "open")
             issue_list= [f"- #{issue.number} {issue.title}" for issue in issues[:5]]
             
             return "Open issues: \n"+ "\n".join(issue_list) if issue_list else "No open issues found."
         
-        if "pr" in query or "pull request" in query:
+        if self.last_intent=="github.pull_requests":
             prs=repo.get_pulls(state="open")
             pr_list= [f" - #{pr.number} {pr.title}" for pr in prs[:5]]
             return "Open Pull Requests: \n"+ "\n".join(pr_list) if pr_list else "No open Pull Requests found."
